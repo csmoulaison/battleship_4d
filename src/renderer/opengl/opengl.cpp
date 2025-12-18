@@ -145,18 +145,22 @@ Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 
 void platform_render_update(Render::Context* renderer, Render::State* render_state, Windowing::Context* window, Arena* arena)
 {
+	printf("    0\n");
 	GlBackend* gl = (GlBackend*)renderer->backend;
 
+	printf("    1\n");
 	if(window->viewport_update_requested)
 	{
 		glViewport(0, 0, window->window_width, window->window_height);
 		window->viewport_update_requested = false;
 	}
 	
+	printf("    2\n");
 	// Gl render
 	glClearColor(0.0f, 0.0f, 0.0f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	printf("    3\n");
 	// Draw rects
 	glUseProgram(gl->quad_program);
 	u32 quad_ubo_block_index = glGetUniformBlockIndex(gl->quad_program, "ubo");
@@ -165,6 +169,7 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 
 	glBindVertexArray(gl->quad_vao);
 
+	printf("    4\n");
 	for(u32 i = 0; i < render_state->rects_len; i++)
 	{
 		// Update ubo
@@ -194,11 +199,13 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 
+	printf("    5\n");
 	// Text rendering
 	glUseProgram(gl->text_program);
 	glActiveTexture(GL_TEXTURE0);
 	glBindVertexArray(gl->quad_vao);
 
+	printf("    6\n");
 	for(u8 i = 0; i < NUM_FONTS; i++) {
 		Render::CharacterList* list = &render_state->character_lists[i];
 		Render::Font* font = &renderer->fonts[i];
@@ -225,6 +232,7 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, list->characters_len);
 	}
 
+	printf("    7\n");
 	// Unbind stuff
 	glBindVertexArray(0);
 	glBindTexture(GL_TEXTURE_2D, 0);

@@ -1,0 +1,3 @@
+struct Agent {
+	Action action;
+};

@@ -54,9 +54,9 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 {
 	Game* game = (Game*)arena_alloc(program_arena, sizeof(Game));
 
-	arena_init(&game->persistent_arena, MEGABYTE);
-	arena_init(&game->session_arena, MEGABYTE);
-	arena_init(&game->frame_arena, MEGABYTE);
+	arena_init(&game->persistent_arena, MEGABYTE * 4);
+	arena_init(&game->session_arena, MEGABYTE * 4);
+	arena_init(&game->frame_arena, MEGABYTE * 4);
 
 	game->state = GameState::Splash;
 	game->close_requested = false;
@@ -76,17 +76,41 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 	return game;
 }
 
+void splash_update(Game* game, Windowing::Context* window, Render::Context* renderer) {
+	text_line( renderer, "Splash!", window->window_width / 2.0f, window->window_height / 2.0f, 0.5f, 0.5f,  1.0f, 1.0f, 1.0f, 1.0f, FONT_FACE_SMALL);
+
+	if(Windowing::button_pressed(window, game->action_button)) {
+		game->state = GameState::Session;
+	}
+}
+
+void session_update(Game* game, Windowing::Context* window, Render::Context* renderer) {
+	text_line( renderer, "Session?", window->window_width / 2.0f, window->window_height / 2.0f, 0.5f, 0.5f,  1.0f, 1.0f, 1.0f, 1.0f, FONT_FACE_SMALL);
+
+	if(Windowing::button_pressed(window, game->action_button)) {
+		game->state = GameState::End;
+	}
+}
+
+void end_update(Game* game, Windowing::Context* window, Render::Context* renderer) {
+	text_line( renderer, "End...", window->window_width / 2.0f, window->window_height / 2.0f, 0.5f, 0.5f,  1.0f, 1.0f, 1.0f, 1.0f, FONT_FACE_SMALL);
+
+	if(Windowing::button_pressed(window, game->action_button)) {
+		game->state = GameState::Splash;
+	}
+}
+
 void game_update(Game* game, Windowing::Context* window, Render::Context* renderer)
 {
 	switch(game->state) {
 		case GameState::Splash:
-			// splash_update(game, window, renderer);
+			splash_update(game, window, renderer);
 			break;
 		case GameState::Session:
-			// session_update(game, window, renderer);
+			session_update(game, window, renderer);
 			break;
 		case GameState::End:
-			// end_update(game, window, renderer);
+			end_update(game, window, renderer);
 			break;
 		default: break;
 	} 

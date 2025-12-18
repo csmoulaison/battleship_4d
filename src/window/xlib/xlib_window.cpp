@@ -68,7 +68,7 @@ void platform_init_post_graphics(Windowing::Context* context)
 	context->window_height = window_attributes.height;
 }
 
-Windowing::Keycode xlib_platform_from_x11_key(u32 keycode)
+Windowing::Keycode xlib_platform_from_x11_key(i32 keycode)
 {
 	switch(keycode) {
 		case XK_w:
@@ -107,18 +107,19 @@ void platform_update(Windowing::Context* context, Arena* arena)
 {
 	Xlib* xlib = (Xlib*)context->backend;
 
-	for(u32 i = 0; i < context->input_buttons_len; i++) {
+	context->input_button_states[0] = 0;
+	for(u32 i = 1; i < context->input_buttons_len; i++) {
 		context->input_button_states[i] = context->input_button_states[i] & ~INPUT_PRESSED_BIT & ~INPUT_RELEASED_BIT;
 	}
 
 	while(XPending(xlib->display)) {
 		XEvent event;
-		u32 keycode;
+		i32 keycode;
 		Windowing::ButtonHandle btn;
 		u8 set_flags;
 		XEvent next_event;
 
-		XNextEvent(xlib->display,  &event);
+		XNextEvent(xlib->display, &event);
 		switch(event.type) {
 			case Expose: 
 				break;
@@ -136,7 +137,7 @@ void platform_update(Windowing::Context* context, Arena* arena)
 			case ButtonRelease:
 				break;
 			case KeyPress:
-				keycode = (u32)xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
+				keycode = (i32)xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
 				if(keycode >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
 					break;
 				}
@@ -157,7 +158,7 @@ void platform_update(Windowing::Context* context, Arena* arena)
 	                }
 	            }
 
-				keycode = (u32)xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
+				keycode = (i32)xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
 				if(keycode >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
 					break;
 				}
@@ -184,7 +185,7 @@ void platform_swap_buffers(Windowing::Context* context)
 
 u32 platform_register_key(Windowing::Context* context, Windowing::Keycode keycode)
 {
-	context->input_keycode_to_button_lookup[(u32)keycode] = context->input_buttons_len;
+	context->input_keycode_to_button_lookup[(i32)keycode] = context->input_buttons_len;
 	context->input_buttons_len++;
 	return context->input_buttons_len - 1;
 }

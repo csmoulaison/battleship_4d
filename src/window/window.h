@@ -42,7 +42,7 @@ namespace Windowing {
 
 		u8 input_buttons_len;
 		u8 input_button_states[MAX_PLATFORM_BUTTONS];
-		i16 input_keycode_to_button_lookup[INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN];
+		ButtonHandle input_keycode_to_button_lookup[INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN];
 	};
 }
 

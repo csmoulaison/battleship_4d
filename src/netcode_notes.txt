@@ -1,0 +1,26 @@
+NETCODE NOTES
+=============
+Here's one possible generalization of networked and local play.
+
+There is one central GameAuthority which arbitrates player actions. There are
+multiple GameAgents which provide player actions to the authority.
+
+A GameAuthority contains agent slots which can be filled by either local/CPU
+or remote players. The agent actions are populated either locally or from server
+packets, but neither the GameAgent nor the GameAuthority is aware of this 
+distinction.
+
+Both of these sections have access to a Session struct which contains the data
+which, for instance, can be rendered by the client program.
+
+struct GameAuthority {
+	Session session;
+	GameAgent agent_slots[];
+	AuthorityEvent event_queue[];
+};
+
+struct GameAgent {
+	AgentEvent event_queue[];
+};
+
+
