@@ -107,8 +107,7 @@ void platform_update(Windowing::Context* context, Arena* arena)
 {
 	Xlib* xlib = (Xlib*)context->backend;
 
-	context->input_button_states[0] = 0;
-	for(u32 i = 1; i < context->input_buttons_len; i++) {
+	for(u32 i = 0; i < context->input_buttons_len; i++) {
 		context->input_button_states[i] = context->input_button_states[i] & ~INPUT_PRESSED_BIT & ~INPUT_RELEASED_BIT;
 	}
 

@@ -19,7 +19,7 @@ enum FontFace {
 	FONT_FACE_LARGE,
 	NUM_FONTS
 };
-#define FONT_FILENAMES { "fonts/ovo_small.cmfont", "fonts/ovo_large.cmfont" };
+#define FONT_FILENAMES { "fonts/font_small.cmfont", "fonts/font_large.cmfont" };
 
 namespace Render {
 	struct FontGlyph {
