@@ -21,6 +21,8 @@ seen by the other player. The only information which is not shown to both
 players is the position of the ships.
 */
 
+#include "game/grid.cpp"
+
 #define MENU_ITEMS_LEN 5
 const char* menu_strings[MENU_ITEMS_LEN] = {
 	"Resume",
@@ -202,10 +204,37 @@ void session_update(Game* game, Windowing::Context* window, Render::Context* ren
 	if(game->camera_theta > 10.0f)
 		game->camera_theta = 0.0f;
 
+	i8 xmove = 0;
+	i8 ymove = 0;
+	i8 zmove = 0;
+	if(Windowing::button_pressed(window, game->right_button))
+		xmove = 1;
+	if(Windowing::button_pressed(window, game->left_button))
+		xmove = -1;
 	if(Windowing::button_pressed(window, game->up_button))
-		game->selection_index += 3;
+		ymove = 1;
 	if(Windowing::button_pressed(window, game->down_button))
-		game->selection_index -= 3;
+		ymove = -1;
+	if(Windowing::button_pressed(window, game->forward_button))
+		zmove = -1;
+	if(Windowing::button_pressed(window, game->back_button))
+		zmove = 1;
+
+	i32 selection_xyz[3];
+	grid_xyz_from_index(game->selection_index, selection_xyz);
+
+	selection_xyz[0] += xmove;
+	if(selection_xyz[0] < 0) selection_xyz[0] = GRID_LENGTH - 1;
+	if(selection_xyz[0] >= GRID_LENGTH) selection_xyz[0] = 0;
+
+	selection_xyz[1] += ymove;
+	if(selection_xyz[1] < 0) selection_xyz[1] = GRID_LENGTH - 1;
+	if(selection_xyz[1] >= GRID_LENGTH) selection_xyz[1] = 0;
+
+	selection_xyz[2] += zmove;
+	if(selection_xyz[2] < 0) selection_xyz[2] = GRID_LENGTH - 1;
+	if(selection_xyz[2] >= GRID_LENGTH) selection_xyz[2] = 0;
+	game->selection_index = grid_index_from_xyz(selection_xyz);
 
 	game->menu_transition_t -= game->menu_transition_speed * BASE_FRAME_LENGTH;
 	if(game->menu_transition_t < 0.0f) game->menu_transition_t = 0.0f;
@@ -272,13 +301,13 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 	float dist = 1.5f;
 	for(i32 i = 0; i < 27; i++) {
 		Render::Cube* cube = &renderer->current_state.cubes[i];
-		i32 x = i % 3;
-		i32 y = i / 3 % 3;
-		i32 z = i / 9;
 
-		cube->position[0] = -dist + (f32)x * dist;
-		cube->position[1] = -dist + (f32)y * dist;
-		cube->position[2] = -dist + (f32)z * dist;
+		i32 render_pos[3];
+		grid_xyz_from_index(i, render_pos);
+
+		cube->position[0] = -dist + (f32)render_pos[0] * dist;
+		cube->position[1] = -dist + (f32)render_pos[1] * dist;
+		cube->position[2] = -dist + (f32)render_pos[2] * dist;
 
 		cube->position[0] = lerp(cube->position[0], game->cube_idle_positions[i][0], smooth_t);
 		cube->position[1] = lerp(cube->position[1], game->cube_idle_positions[i][1], smooth_t);
