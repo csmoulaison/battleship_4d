@@ -5,7 +5,7 @@
 #include "window/window.h"
 
 #define MAX_RENDER_RECTS 16
-#define MAX_RENDER_CUBES 32
+#define MAX_RENDER_CUBES 128
 #define MAX_FONT_GLYPHS 128
 #define MAX_RENDER_CHARS 1024
 

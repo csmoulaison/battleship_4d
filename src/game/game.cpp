@@ -22,6 +22,7 @@ players is the position of the ships.
 */
 
 #include "game/grid.cpp"
+#include "game/voxel_sort.cpp"
 
 #define MENU_ITEMS_LEN 5
 const char* menu_strings[MENU_ITEMS_LEN] = {
@@ -37,6 +38,13 @@ enum class GameState {
 	Session
 };
 
+enum MoveType {
+	MOVE_TYPE_MOVE = 0,
+	MOVE_TYPE_QUERY,
+	MOVE_TYPE_FIRE,
+	NUM_MOVE_TYPES
+};
+
 struct Game {
 	Arena persistent_arena;
 	Arena session_arena;
@@ -48,17 +56,12 @@ struct Game {
 	float menu_transition_t;
 	float menu_transition_speed;
 
-	// Session
-	i32 selection_index;
-
 	Windowing::ButtonHandle up_button;
 	Windowing::ButtonHandle down_button;
 	Windowing::ButtonHandle left_button;
 	Windowing::ButtonHandle right_button;
 	Windowing::ButtonHandle forward_button;
 	Windowing::ButtonHandle back_button;
-	Windowing::ButtonHandle ana_button;
-	Windowing::ButtonHandle kata_button;
 
 	Windowing::ButtonHandle pitch_up_button;
 	Windowing::ButtonHandle pitch_down_button;
@@ -67,11 +70,21 @@ struct Game {
 
 	Windowing::ButtonHandle quit_button;
 	Windowing::ButtonHandle action_button;
+	Windowing::ButtonHandle cycle_button;
 
-	// Menu data
+	// Menu
 	i32 menu_selection;
 	float menu_activations[MENU_ITEMS_LEN];
 	float menu_flashes[MENU_ITEMS_LEN];
+
+	// Game control
+	i32 selection_index;
+	i32 move_type;
+
+	// Game state
+	i32 player_ship;
+	i32 opponent_ship;
+	i32 query_index;
 
 	// Camera
 	f32 camera_phi;
@@ -80,8 +93,10 @@ struct Game {
 	f32 camera_target_distance;
 
 	// Cubes
-	f32 cube_idle_positions[27][3];
-	f32 cube_idle_orientations[27][3];
+	f32 cube_color_targets[GRID_VOLUME][4];
+	f32 cube_colors[GRID_VOLUME][4];
+	f32 cube_idle_positions[GRID_VOLUME][3];
+	f32 cube_idle_orientations[GRID_VOLUME][3];
 };
 
 Game* game_init(Windowing::Context* window, Arena* program_arena) 
@@ -98,16 +113,12 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 	game->menu_transition_t = 1;
 	game->menu_transition_speed = STATE_TRANSITION_SPEED;
 
-	game->selection_index = 0;
-
-	game->up_button = Windowing::register_key(window, Windowing::Keycode::Q);
-	game->down_button = Windowing::register_key(window, Windowing::Keycode::E);
+	game->down_button = Windowing::register_key(window, Windowing::Keycode::Q);
+	game->up_button = Windowing::register_key(window, Windowing::Keycode::E);
 	game->left_button = Windowing::register_key(window, Windowing::Keycode::A);
 	game->right_button = Windowing::register_key(window, Windowing::Keycode::D);
 	game->forward_button = Windowing::register_key(window, Windowing::Keycode::W);
 	game->back_button = Windowing::register_key(window, Windowing::Keycode::S);
-	game->ana_button = Windowing::register_key(window, Windowing::Keycode::X);
-	game->kata_button = Windowing::register_key(window, Windowing::Keycode::Z);
 
 	game->pitch_up_button = Windowing::register_key(window, Windowing::Keycode::Up);
 	game->pitch_down_button = Windowing::register_key(window, Windowing::Keycode::Down);
@@ -116,6 +127,7 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 
 	game->quit_button = Windowing::register_key(window, Windowing::Keycode::Escape);
 	game->action_button = Windowing::register_key(window, Windowing::Keycode::Space);
+	game->cycle_button = Windowing::register_key(window, Windowing::Keycode::Tab);
 
 	game->menu_selection = 0;
 	for(i32 i = 0; i > MENU_ITEMS_LEN; i++) {
@@ -123,12 +135,28 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 		game->menu_flashes[i] = 0;
 	}
 
+	game->selection_index = 0;
+	game->move_type = MOVE_TYPE_QUERY;
+
+	game->player_ship = 22;
+	game->opponent_ship = 9;
+	game->query_index = 0;
+
 	game->camera_phi = 1.1f;
 	game->camera_theta = 1.2f;
-	game->camera_distance = 10.0f;
+	game->camera_distance = 12.5f;
 	game->camera_target_distance = 1.0f;
 
-	for(i32 i = 0; i < 27; i++) {
+	for(i32 i = 0; i < GRID_VOLUME; i++) {
+		game->cube_color_targets[i][0] = 0.9f;
+		game->cube_color_targets[i][1] = 0.9f;
+		game->cube_color_targets[i][2] = 0.9f;
+		game->cube_color_targets[i][3] = 0.0f;
+		game->cube_colors[i][0] = 0.9f;
+		game->cube_colors[i][1] = 0.9f;
+		game->cube_colors[i][2] = 0.9f;
+		game->cube_colors[i][3] = 0.0f;
+
 		game->cube_idle_positions[i][0] = random_f32() * 20.0f - 10.0f;
 		game->cube_idle_positions[i][1] = random_f32() * 20.0f - 10.0f;
 		game->cube_idle_positions[i][2] = random_f32() * 20.0f - 10.0f;
@@ -185,6 +213,7 @@ void menu_update(Game* game, Windowing::Context* window, Render::Context* render
 }
 
 void session_update(Game* game, Windowing::Context* window, Render::Context* renderer) {
+	// Camera control
 	if(Windowing::button_down(window, game->yaw_up_button))
 		game->camera_theta += 5.0f * BASE_FRAME_LENGTH;
 	if(Windowing::button_down(window, game->yaw_down_button))
@@ -204,38 +233,55 @@ void session_update(Game* game, Windowing::Context* window, Render::Context* ren
 	if(game->camera_theta > 10.0f)
 		game->camera_theta = 0.0f;
 
+	// Selection control
+	i32 selection_pos[3];
+	grid_position_from_index(game->selection_index, selection_pos);
+
 	i8 xmove = 0;
 	i8 ymove = 0;
 	i8 zmove = 0;
-	if(Windowing::button_pressed(window, game->right_button))
-		xmove = 1;
-	if(Windowing::button_pressed(window, game->left_button))
+
+	if(Windowing::button_pressed(window, game->left_button) && selection_pos[0] > 0)
 		xmove = -1;
-	if(Windowing::button_pressed(window, game->up_button))
-		ymove = 1;
-	if(Windowing::button_pressed(window, game->down_button))
+	if(Windowing::button_pressed(window, game->right_button) && selection_pos[0] < GRID_LENGTH - 1)
+		xmove = 1;
+	if(Windowing::button_pressed(window, game->down_button) && selection_pos[1] > 0)
 		ymove = -1;
-	if(Windowing::button_pressed(window, game->forward_button))
+	if(Windowing::button_pressed(window, game->up_button) && selection_pos[1] < GRID_LENGTH - 1)
+		ymove = 1;
+	if(Windowing::button_pressed(window, game->forward_button) && selection_pos[2] > 0)
 		zmove = -1;
-	if(Windowing::button_pressed(window, game->back_button))
+	if(Windowing::button_pressed(window, game->back_button) && selection_pos[2] < GRID_LENGTH - 1)
 		zmove = 1;
 
-	i32 selection_xyz[3];
-	grid_xyz_from_index(game->selection_index, selection_xyz);
+	selection_pos[0] += xmove;
+	selection_pos[1] += ymove;
+	selection_pos[2] += zmove;
+	game->selection_index = grid_index_from_position(selection_pos);
 
-	selection_xyz[0] += xmove;
-	if(selection_xyz[0] < 0) selection_xyz[0] = GRID_LENGTH - 1;
-	if(selection_xyz[0] >= GRID_LENGTH) selection_xyz[0] = 0;
+	if(Windowing::button_pressed(window, game->cycle_button)) {
+		game->move_type++;
+		if(game->move_type >= NUM_MOVE_TYPES) {
+			game->move_type = 0;
+		}
+	}
 
-	selection_xyz[1] += ymove;
-	if(selection_xyz[1] < 0) selection_xyz[1] = GRID_LENGTH - 1;
-	if(selection_xyz[1] >= GRID_LENGTH) selection_xyz[1] = 0;
+	if(game->move_type == MOVE_TYPE_QUERY) {
+		if(Windowing::button_pressed(window, game->action_button)) {
+			game->query_index++;
+			if(game->query_index > 2) {
+				game->query_index = 0;
+			}
+		}
+	} else if(game->move_type == MOVE_TYPE_MOVE) {
+		i32 ship_position[3];
+		grid_position_from_index(game->player_ship, ship_position);
+		if(Windowing::button_pressed(window, game->action_button) && grid_eligible_move_position(ship_position, game->selection_index)) {
+			game->player_ship = game->selection_index;
+		}
+	}
 
-	selection_xyz[2] += zmove;
-	if(selection_xyz[2] < 0) selection_xyz[2] = GRID_LENGTH - 1;
-	if(selection_xyz[2] >= GRID_LENGTH) selection_xyz[2] = 0;
-	game->selection_index = grid_index_from_xyz(selection_xyz);
-
+	// Menu transition and control
 	game->menu_transition_t -= game->menu_transition_speed * BASE_FRAME_LENGTH;
 	if(game->menu_transition_t < 0.0f) game->menu_transition_t = 0.0f;
 
@@ -299,39 +345,123 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 
 	f32 smooth_t = smoothstep(0.0f, 1.0f, game->menu_transition_t);
 	float dist = 1.5f;
-	for(i32 i = 0; i < 27; i++) {
+
+	i32 render_index_map[GRID_VOLUME];
+	sort_voxels(render_index_map, renderer->current_state.camera_position);
+	
+	for(i32 i = 0; i < GRID_VOLUME; i++) {
 		Render::Cube* cube = &renderer->current_state.cubes[i];
 
 		i32 render_pos[3];
-		grid_xyz_from_index(i, render_pos);
+		i32 cube_index = render_index_map[i];
+		grid_position_from_index(cube_index, render_pos);
 
-		cube->position[0] = -dist + (f32)render_pos[0] * dist;
-		cube->position[1] = -dist + (f32)render_pos[1] * dist;
-		cube->position[2] = -dist + (f32)render_pos[2] * dist;
+		cube->position[0] = -dist * 1.5 + (f32)render_pos[0] * dist;
+		cube->position[1] = -dist * 1.5 + (f32)render_pos[1] * dist;
+		cube->position[2] = -dist * 1.5 + (f32)render_pos[2] * dist;
 
-		cube->position[0] = lerp(cube->position[0], game->cube_idle_positions[i][0], smooth_t);
-		cube->position[1] = lerp(cube->position[1], game->cube_idle_positions[i][1], smooth_t);
-		cube->position[2] = lerp(cube->position[2], game->cube_idle_positions[i][2], smooth_t);
+		cube->position[0] = lerp(cube->position[0], game->cube_idle_positions[cube_index][0], smooth_t);
+		cube->position[1] = lerp(cube->position[1], game->cube_idle_positions[cube_index][1], smooth_t);
+		cube->position[2] = lerp(cube->position[2], game->cube_idle_positions[cube_index][2], smooth_t);
 
 		cube->orientation[0] = 0.0f;
 		cube->orientation[1] = 0.0f;
 		cube->orientation[2] = 0.0f;
 
-		cube->orientation[0] = lerp(cube->orientation[0], game->cube_idle_orientations[i][0], smooth_t);
-		cube->orientation[1] = lerp(cube->orientation[1], game->cube_idle_orientations[i][1], smooth_t);
-		cube->orientation[2] = lerp(cube->orientation[2], game->cube_idle_orientations[i][2], smooth_t);
+		cube->orientation[0] = lerp(cube->orientation[0], game->cube_idle_orientations[cube_index][0], smooth_t);
+		cube->orientation[1] = lerp(cube->orientation[1], game->cube_idle_orientations[cube_index][1], smooth_t);
+		cube->orientation[2] = lerp(cube->orientation[2], game->cube_idle_orientations[cube_index][2], smooth_t);
 
+		f32* color_target = game->cube_color_targets[cube_index];
+		color_target[0] = 0.8f;
+		color_target[1] = 0.8f;
+		color_target[2] = 0.8f;
+		color_target[3] = 0.1f + (v3_distance(cube->position, renderer->current_state.camera_position) - game->camera_distance / 2.0f) * 0.008f - smooth_t * 0.1f;
 
-		float selected_mod = 0.0f;
-		if(i == game->selection_index) selected_mod = 1.0f;
+		if(game->move_type == MOVE_TYPE_MOVE) {
+			i32 player_ship_pos[3];
+			grid_position_from_index(game->player_ship, player_ship_pos);
 
-		cube->color[0] = 0.8f + selected_mod * 0.2f;
-		cube->color[1] = 0.8f - selected_mod * 0.2f;
-		cube->color[2] = 0.8f - selected_mod * 0.2f;
-		cube->color[3] = 0.6f - smooth_t * 0.4f + selected_mod * 0.25f;
+			if(grid_eligible_move_position(player_ship_pos, cube_index)) {
+				color_target[0] = 1.0f;
+				color_target[1] = 1.0f;
+				color_target[2] = 1.0f;
+				color_target[3] += 0.4f + sin((f32)game->frames_since_init * 0.1f) * 0.1f;
+			}
+
+			if(cube_index == game->selection_index) {
+				color_target[0] = 0.2f;
+				color_target[1] = 0.2f;
+				color_target[2] = 0.2f;
+				color_target[3] = 0.2f;
+			}
+
+			if(cube_index == game->player_ship) {
+				color_target[1] -= 0.6f;
+				color_target[2] -= 0.6f;
+				color_target[3] += 0.3f;
+			}
+		} else if(game->move_type == MOVE_TYPE_QUERY) {
+			i32 player_ship_pos[3];
+			grid_position_from_index(game->player_ship, player_ship_pos);
+
+			if(player_ship_pos[game->query_index] == render_pos[game->query_index]) {
+				i32 opponent_ship_pos[3];
+				grid_position_from_index(game->opponent_ship, opponent_ship_pos);
+				if(opponent_ship_pos[game->query_index] == render_pos[game->query_index]) {
+					color_target[0] = 0.8f;
+					color_target[1] = 0.1f;
+					color_target[2] = 0.1f;
+					color_target[3] = 0.2f;
+				} else {
+					color_target[0] = 0.8f;
+					color_target[1] = 0.8f;
+					color_target[2] = 0.2f;
+					color_target[3] += 0.1f + sin((f32)game->frames_since_init * 0.1f) * 0.1f;
+				}
+			}
+
+			if(cube_index == game->player_ship) {
+				color_target[1] -= 0.6f;
+				color_target[2] -= 0.6f;
+				color_target[3] += 0.3f;
+			}
+		} else if(game->move_type == MOVE_TYPE_FIRE) {
+			if(cube_index == game->player_ship) {
+				color_target[0] = 0.4f;
+				color_target[1] = 0.1f;
+				color_target[2] = 0.4f;
+				color_target[3] = 0.2f;
+			}
+
+			if(cube_index == game->selection_index) {
+				if(cube_index == game->opponent_ship) {
+					color_target[0] = 0.8f;
+					color_target[1] = 0.1f;
+					color_target[2] = 0.1f;
+					color_target[3] = 0.2f;
+				} else {
+					color_target[0] = 0.6f;
+					color_target[1] = 0.1f;
+					color_target[2] = 0.6f;
+					color_target[3] += 0.5f + sin((f32)game->frames_since_init * 0.05f) * 0.1f;
+				}
+			}
+		}
+
+		f32* color = game->cube_colors[cube_index];
+		color[0] = lerp(color[0], color_target[0], BASE_FRAME_LENGTH * VOXEL_COLOR_SPEED);
+		color[1] = lerp(color[1], color_target[1], BASE_FRAME_LENGTH * VOXEL_COLOR_SPEED);
+		color[2] = lerp(color[2], color_target[2], BASE_FRAME_LENGTH * VOXEL_COLOR_SPEED);
+		color[3] = lerp(color[3], color_target[3], BASE_FRAME_LENGTH * VOXEL_COLOR_SPEED);
+
+		cube->color[0] = color[0];
+		cube->color[1] = color[1];
+		cube->color[2] = color[2];
+		cube->color[3] = color[3];
 	}
 
-	renderer->current_state.cubes_len = 27;
+	renderer->current_state.cubes_len = GRID_VOLUME;
 
 	renderer->current_state.clear_color[0] = 0.9f;
 	renderer->current_state.clear_color[1] = 0.9f;

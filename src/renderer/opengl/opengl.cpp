@@ -152,10 +152,10 @@ Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 		panic();
 	}
 
-	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glDepthFunc(GL_LEQUAL);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable(GL_DEPTH_TEST);
 
 	// Cube rendering
 	gl->cube_program = gl_create_program("shaders/cube.vert", "shaders/cube.frag");
@@ -306,7 +306,6 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 	}
 
 	// Text rendering
-	glDisable(GL_DEPTH_TEST);
 	glUseProgram(gl->text_program);
 	glActiveTexture(GL_TEXTURE0);
 	glBindVertexArray(gl->quad_vao);
@@ -336,7 +335,6 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 		glBindTexture(GL_TEXTURE_2D, font->texture_id);
 		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, list->characters_len);
 	}
-	glEnable(GL_DEPTH_TEST);
 
 	// Unbind stuff
 	glBindVertexArray(0);
