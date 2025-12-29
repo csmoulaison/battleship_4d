@@ -373,27 +373,27 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 		cube->orientation[2] = lerp(cube->orientation[2], game->cube_idle_orientations[cube_index][2], smooth_t);
 
 		f32* color_target = game->cube_color_targets[cube_index];
-		color_target[0] = 0.8f;
-		color_target[1] = 0.8f;
+		color_target[0] = 0.6f;
+		color_target[1] = 0.6f;
 		color_target[2] = 0.8f;
-		color_target[3] = 0.1f + (v3_distance(cube->position, renderer->current_state.camera_position) - game->camera_distance / 2.0f) * 0.008f - smooth_t * 0.1f;
+		color_target[3] = 0.0f + (v3_distance(cube->position, renderer->current_state.camera_position) - game->camera_distance / 2.0f) * 0.008f - smooth_t * 0.1f;
 
 		if(game->move_type == MOVE_TYPE_MOVE) {
 			i32 player_ship_pos[3];
 			grid_position_from_index(game->player_ship, player_ship_pos);
 
 			if(grid_eligible_move_position(player_ship_pos, cube_index)) {
-				color_target[0] = 1.0f;
-				color_target[1] = 1.0f;
-				color_target[2] = 1.0f;
-				color_target[3] += 0.4f + sin((f32)game->frames_since_init * 0.1f) * 0.1f;
+				color_target[0] = 0.5f;
+				color_target[1] = 0.5f;
+				color_target[2] = 0.5f;
+				color_target[3] = 0.5f;
 			}
 
 			if(cube_index == game->selection_index) {
 				color_target[0] = 0.2f;
 				color_target[1] = 0.2f;
-				color_target[2] = 0.2f;
-				color_target[3] = 0.2f;
+				color_target[2] = 0.7f;
+				color_target[3] = 0.6f;
 			}
 
 			if(cube_index == game->player_ship) {
@@ -417,7 +417,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					color_target[0] = 0.8f;
 					color_target[1] = 0.8f;
 					color_target[2] = 0.2f;
-					color_target[3] += 0.1f + sin((f32)game->frames_since_init * 0.1f) * 0.1f;
+					color_target[3] = 0.5f;
 				}
 			}
 
@@ -441,10 +441,10 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					color_target[2] = 0.1f;
 					color_target[3] = 0.2f;
 				} else {
-					color_target[0] = 0.6f;
-					color_target[1] = 0.1f;
-					color_target[2] = 0.6f;
-					color_target[3] += 0.5f + sin((f32)game->frames_since_init * 0.05f) * 0.1f;
+					color_target[0] = 0.7f;
+					color_target[1] = 0.2f;
+					color_target[2] = 0.2f;
+					color_target[3] = 0.6f;
 				}
 			}
 		}
@@ -463,9 +463,9 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 
 	renderer->current_state.cubes_len = GRID_VOLUME;
 
-	renderer->current_state.clear_color[0] = 0.9f;
-	renderer->current_state.clear_color[1] = 0.9f;
-	renderer->current_state.clear_color[2] = 0.9f;
+	renderer->current_state.clear_color[0] = 0.03f;
+	renderer->current_state.clear_color[1] = 0.02f;
+	renderer->current_state.clear_color[2] = 0.05f;
 
 }
 

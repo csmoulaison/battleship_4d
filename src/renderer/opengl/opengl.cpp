@@ -226,7 +226,7 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 	glClearColor(
 		render_state->clear_color[0], 
 		render_state->clear_color[1], 
-		render_state->clear_color[2], 
+		render_state->clear_color[2],
 		1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
