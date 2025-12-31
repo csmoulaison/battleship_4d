@@ -3,7 +3,7 @@
 
 #include "base/base.h"
 
-#define MAX_PLATFORM_BUTTONS 32
+#define MAX_PLATFORM_BUTTONS 64
 
 #define INPUT_DOWN_BIT     0b00000001
 #define INPUT_PRESSED_BIT  0b00000010
@@ -29,7 +29,8 @@ namespace Windowing {
 		Down,
 		Right,
 		Escape,
-		Tab
+		Tab,
+		Enter
 	};
 
 	typedef u32 ButtonHandle;

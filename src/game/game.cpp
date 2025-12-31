@@ -21,15 +21,18 @@ seen by the other player. The only information which is not shown to both
 players is the position of the ships.
 */
 
+// Christian didn't ever do anything but move. He wins every time.
+
 #include "game/grid.cpp"
+#include "game/helpers.cpp"
 #include "game/voxel_sort.cpp"
 
 #define MENU_ITEMS_LEN 5
 const char* menu_strings[MENU_ITEMS_LEN] = {
 	"Resume",
-	"New Game",
-	"Controls",
-	"Settings",
+	"Submarine",
+	"Bombergramps",
+	"Sandbox",
 	"Quit"
 };
 
@@ -38,11 +41,37 @@ enum class GameState {
 	Session
 };
 
-enum MoveType {
-	MOVE_TYPE_MOVE = 0,
-	MOVE_TYPE_QUERY,
-	MOVE_TYPE_FIRE,
-	NUM_MOVE_TYPES
+enum class GameType {
+	Submarine,
+	Bomber,
+	Sandbox
+};
+
+enum SubmarineActionType {
+	SUBMARINE_ACTION_MOVE = 0,
+	SUBMARINE_ACTION_QUERY,
+	SUBMARINE_ACTION_FIRE,
+	NUM_SUBMARINE_ACTIONS
+};
+
+struct Submarine {
+	bool game_won;
+	i32 turn;
+	bool interstitial;
+
+	i32 action_type;
+	i32 ship_indices[2];
+	i32 query_axis;
+
+	i32 previous_action_type;
+	i32 previous_action_index;
+	i32 previous_query_axis;
+};
+
+struct Bomber {
+};
+
+struct Sandbox {
 };
 
 struct Game {
@@ -69,8 +98,9 @@ struct Game {
 	Windowing::ButtonHandle yaw_down_button;
 
 	Windowing::ButtonHandle quit_button;
-	Windowing::ButtonHandle action_button;
 	Windowing::ButtonHandle cycle_button;
+	Windowing::ButtonHandle modify_button;
+	Windowing::ButtonHandle action_button;
 
 	// Menu
 	i32 menu_selection;
@@ -79,12 +109,15 @@ struct Game {
 
 	// Game control
 	i32 selection_index;
-	i32 move_type;
 
 	// Game state
-	i32 player_ship;
-	i32 opponent_ship;
-	i32 query_index;
+	GameType game_type;
+	// NOW: union switch to either static allocated array or arena allocation (need game scope arena)
+	union {
+		Submarine submarine;
+		Bomber bomber;
+		Sandbox sandbox;
+	};
 
 	// Camera
 	f32 camera_phi;
@@ -98,6 +131,10 @@ struct Game {
 	f32 cube_idle_positions[GRID_VOLUME][3];
 	f32 cube_idle_orientations[GRID_VOLUME][3];
 };
+
+#include "game/submarine.cpp"
+#include "game/bomber.cpp"
+#include "game/sandbox.cpp"
 
 Game* game_init(Windowing::Context* window, Arena* program_arena) 
 {
@@ -126,8 +163,9 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 	game->yaw_down_button = Windowing::register_key(window, Windowing::Keycode::Right);
 
 	game->quit_button = Windowing::register_key(window, Windowing::Keycode::Escape);
-	game->action_button = Windowing::register_key(window, Windowing::Keycode::Space);
 	game->cycle_button = Windowing::register_key(window, Windowing::Keycode::Tab);
+	game->modify_button = Windowing::register_key(window, Windowing::Keycode::Space);
+	game->action_button = Windowing::register_key(window, Windowing::Keycode::Enter);
 
 	game->menu_selection = 0;
 	for(i32 i = 0; i > MENU_ITEMS_LEN; i++) {
@@ -136,15 +174,10 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 	}
 
 	game->selection_index = 0;
-	game->move_type = MOVE_TYPE_QUERY;
-
-	game->player_ship = 22;
-	game->opponent_ship = 9;
-	game->query_index = 0;
 
 	game->camera_phi = 1.1f;
 	game->camera_theta = 1.2f;
-	game->camera_distance = 12.5f;
+	game->camera_distance = 2.5f * GRID_LENGTH;
 	game->camera_target_distance = 1.0f;
 
 	for(i32 i = 0; i < GRID_VOLUME; i++) {
@@ -165,6 +198,19 @@ Game* game_init(Windowing::Context* window, Arena* program_arena)
 		game->cube_idle_orientations[i][1] = random_f32() * 1.0f;
 		game->cube_idle_orientations[i][2] = random_f32() * 1.0f;
 	}
+
+	switch(game->game_type) {
+		case GameType::Submarine:
+			submarine_init(&game->submarine);
+			break;
+		case GameType::Bomber:
+			bomber_init(&game->bomber);
+			break;
+		case GameType::Sandbox:
+			sandbox_init(&game->sandbox);
+			break;
+		default: break;
+	};
 
 	return game;
 }
@@ -193,10 +239,16 @@ void menu_update(Game* game, Windowing::Context* window, Render::Context* render
 				game->state = GameState::Session;
 				break;
 			case 1:
+				submarine_init(&game->submarine);
+				game->state = GameState::Session;
 				break;
 			case 2:
+				bomber_init(&game->bomber);
+				game->state = GameState::Session;
 				break;
 			case 3:
+				sandbox_init(&game->sandbox);
+				game->state = GameState::Session;
 				break;
 			case 4:
 				game->close_requested = true;
@@ -233,53 +285,18 @@ void session_update(Game* game, Windowing::Context* window, Render::Context* ren
 	if(game->camera_theta > 10.0f)
 		game->camera_theta = 0.0f;
 
-	// Selection control
-	i32 selection_pos[3];
-	grid_position_from_index(game->selection_index, selection_pos);
-
-	i8 xmove = 0;
-	i8 ymove = 0;
-	i8 zmove = 0;
-
-	if(Windowing::button_pressed(window, game->left_button) && selection_pos[0] > 0)
-		xmove = -1;
-	if(Windowing::button_pressed(window, game->right_button) && selection_pos[0] < GRID_LENGTH - 1)
-		xmove = 1;
-	if(Windowing::button_pressed(window, game->down_button) && selection_pos[1] > 0)
-		ymove = -1;
-	if(Windowing::button_pressed(window, game->up_button) && selection_pos[1] < GRID_LENGTH - 1)
-		ymove = 1;
-	if(Windowing::button_pressed(window, game->forward_button) && selection_pos[2] > 0)
-		zmove = -1;
-	if(Windowing::button_pressed(window, game->back_button) && selection_pos[2] < GRID_LENGTH - 1)
-		zmove = 1;
-
-	selection_pos[0] += xmove;
-	selection_pos[1] += ymove;
-	selection_pos[2] += zmove;
-	game->selection_index = grid_index_from_position(selection_pos);
-
-	if(Windowing::button_pressed(window, game->cycle_button)) {
-		game->move_type++;
-		if(game->move_type >= NUM_MOVE_TYPES) {
-			game->move_type = 0;
-		}
-	}
-
-	if(game->move_type == MOVE_TYPE_QUERY) {
-		if(Windowing::button_pressed(window, game->action_button)) {
-			game->query_index++;
-			if(game->query_index > 2) {
-				game->query_index = 0;
-			}
-		}
-	} else if(game->move_type == MOVE_TYPE_MOVE) {
-		i32 ship_position[3];
-		grid_position_from_index(game->player_ship, ship_position);
-		if(Windowing::button_pressed(window, game->action_button) && grid_eligible_move_position(ship_position, game->selection_index)) {
-			game->player_ship = game->selection_index;
-		}
-	}
+	switch(game->game_type) {
+		case GameType::Submarine:
+			submarine_update(game, window);
+			break;
+		case GameType::Bomber:
+			bomber_update(game, window);
+			break;
+		case GameType::Sandbox:
+			sandbox_update(game, window);
+			break;
+		default: break;
+	};
 
 	// Menu transition and control
 	game->menu_transition_t -= game->menu_transition_speed * BASE_FRAME_LENGTH;
@@ -356,9 +373,9 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 		i32 cube_index = render_index_map[i];
 		grid_position_from_index(cube_index, render_pos);
 
-		cube->position[0] = -dist * 1.5 + (f32)render_pos[0] * dist;
-		cube->position[1] = -dist * 1.5 + (f32)render_pos[1] * dist;
-		cube->position[2] = -dist * 1.5 + (f32)render_pos[2] * dist;
+		cube->position[0] = (-0.5f + 0.5f * GRID_LENGTH) * -dist + (f32)render_pos[0] * dist;
+		cube->position[1] = (-0.5f + 0.5f * GRID_LENGTH) * -dist + (f32)render_pos[1] * dist;
+		cube->position[2] = (-0.5f + 0.5f * GRID_LENGTH) * -dist + (f32)render_pos[2] * dist;
 
 		cube->position[0] = lerp(cube->position[0], game->cube_idle_positions[cube_index][0], smooth_t);
 		cube->position[1] = lerp(cube->position[1], game->cube_idle_positions[cube_index][1], smooth_t);
@@ -378,76 +395,18 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 		color_target[2] = 0.8f;
 		color_target[3] = 0.0f + (v3_distance(cube->position, renderer->current_state.camera_position) - game->camera_distance / 2.0f) * 0.008f - smooth_t * 0.1f;
 
-		if(game->move_type == MOVE_TYPE_MOVE) {
-			i32 player_ship_pos[3];
-			grid_position_from_index(game->player_ship, player_ship_pos);
-
-			if(grid_eligible_move_position(player_ship_pos, cube_index)) {
-				color_target[0] = 0.5f;
-				color_target[1] = 0.5f;
-				color_target[2] = 0.5f;
-				color_target[3] = 0.5f;
-			}
-
-			if(cube_index == game->selection_index) {
-				color_target[0] = 0.2f;
-				color_target[1] = 0.2f;
-				color_target[2] = 0.7f;
-				color_target[3] = 0.6f;
-			}
-
-			if(cube_index == game->player_ship) {
-				color_target[1] -= 0.6f;
-				color_target[2] -= 0.6f;
-				color_target[3] += 0.3f;
-			}
-		} else if(game->move_type == MOVE_TYPE_QUERY) {
-			i32 player_ship_pos[3];
-			grid_position_from_index(game->player_ship, player_ship_pos);
-
-			if(player_ship_pos[game->query_index] == render_pos[game->query_index]) {
-				i32 opponent_ship_pos[3];
-				grid_position_from_index(game->opponent_ship, opponent_ship_pos);
-				if(opponent_ship_pos[game->query_index] == render_pos[game->query_index]) {
-					color_target[0] = 0.8f;
-					color_target[1] = 0.1f;
-					color_target[2] = 0.1f;
-					color_target[3] = 0.2f;
-				} else {
-					color_target[0] = 0.8f;
-					color_target[1] = 0.8f;
-					color_target[2] = 0.2f;
-					color_target[3] = 0.5f;
-				}
-			}
-
-			if(cube_index == game->player_ship) {
-				color_target[1] -= 0.6f;
-				color_target[2] -= 0.6f;
-				color_target[3] += 0.3f;
-			}
-		} else if(game->move_type == MOVE_TYPE_FIRE) {
-			if(cube_index == game->player_ship) {
-				color_target[0] = 0.4f;
-				color_target[1] = 0.1f;
-				color_target[2] = 0.4f;
-				color_target[3] = 0.2f;
-			}
-
-			if(cube_index == game->selection_index) {
-				if(cube_index == game->opponent_ship) {
-					color_target[0] = 0.8f;
-					color_target[1] = 0.1f;
-					color_target[2] = 0.1f;
-					color_target[3] = 0.2f;
-				} else {
-					color_target[0] = 0.7f;
-					color_target[1] = 0.2f;
-					color_target[2] = 0.2f;
-					color_target[3] = 0.6f;
-				}
-			}
-		}
+		switch(game->game_type) {
+			case GameType::Submarine:
+				submarine_color_cube(game, cube_index, render_pos, color_target);
+				break;
+			case GameType::Bomber:
+				bomber_color_cube(game, cube_index, render_pos, color_target);
+				break;
+			case GameType::Sandbox:
+				sandbox_color_cube(game, cube_index, render_pos, color_target);
+				break;
+			default: break;
+		};
 
 		f32* color = game->cube_colors[cube_index];
 		color[0] = lerp(color[0], color_target[0], BASE_FRAME_LENGTH * VOXEL_COLOR_SPEED);
@@ -461,12 +420,36 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 		cube->color[3] = color[3];
 	}
 
-	renderer->current_state.cubes_len = GRID_VOLUME;
+	Render::Cube* c = &renderer->current_state.cubes[GRID_VOLUME];
+	c->orientation[0] = 0.0f;
+	c->orientation[1] = 0.0f;
+	c->orientation[2] = 0.0f;
+	c->position[0] = dist * 1.5f;
+	c->position[1] = -dist * 1.5f;
+	c->position[2] = dist * 1.5f;
+	c->color[0] = 0.0f;
+	c->color[1] = 0.0f;
+	c->color[2] = 0.0f;
+	c->color[3] = 0.5f;
 
-	renderer->current_state.clear_color[0] = 0.03f;
-	renderer->current_state.clear_color[1] = 0.02f;
-	renderer->current_state.clear_color[2] = 0.05f;
+	renderer->current_state.cubes_len = GRID_VOLUME + 1;
 
+	renderer->current_state.clear_color[0] = 0.9f;
+	renderer->current_state.clear_color[1] = 0.9f;
+	renderer->current_state.clear_color[2] = 0.9f;
+
+	switch(game->game_type) {
+		case GameType::Submarine:
+			submarine_render(game, renderer, window);
+			break;
+		case GameType::Bomber:
+			bomber_render(game, renderer, window);
+			break;
+		case GameType::Sandbox:
+			sandbox_render(game, renderer, window);
+			break;
+		default: break;
+	};
 }
 
 bool game_close_requested(Game* game)

@@ -101,6 +101,8 @@ Windowing::Keycode xlib_platform_from_x11_key(i32 keycode)
 			return Windowing::Keycode::Escape;
 		case XK_Tab:
 			return Windowing::Keycode::Tab;
+		case XK_Return:
+			return Windowing::Keycode::Enter;
 		default: return Windowing::Keycode::NoKey;
 	}
 }
